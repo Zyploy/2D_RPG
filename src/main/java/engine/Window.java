@@ -2,6 +2,8 @@ package engine;
 
 import engine.input.KeyListener;
 import engine.input.MouseListener;
+import engine.render.Renderer;
+import engine.render.Texture;
 import engine.util.ErrorHandler;
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.glfw.GLFWVidMode;
@@ -12,7 +14,6 @@ import java.nio.IntBuffer;
 
 import static org.lwjgl.glfw.Callbacks.glfwFreeCallbacks;
 import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.glfw.GLFW.glfwPollEvents;
 import static org.lwjgl.opengl.GL11.*;
 import static org.lwjgl.system.MemoryStack.stackPush;
 import static org.lwjgl.system.MemoryUtil.NULL;
@@ -128,9 +129,14 @@ public class Window {
         // creates the GLCapabilities instance and makes the OpenGL
         // bindings available for use.
         GL.createCapabilities();
+
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     }
 
     private void loop() {
+        Renderer renderer = new Renderer();
+
         // Run the rendering loop until the user has attempted to close the window
         while (!glfwWindowShouldClose(window)) {
             // Poll for window events. The key callback above will only be invoked during this call.
@@ -141,10 +147,20 @@ public class Window {
                 glfwSetWindowShouldClose(window, true);
             }
 
-            glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set the clear color
+            glClearColor(1.0f, 1.0f, 1.0f, 1.0f); // Set the clear color
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear the framebuffer
+
+            renderer.render(0, 0, 512, 512, new Texture("src/main/resources/textures/test.png"));
 
             glfwSwapBuffers(window); // swap the color buffers
         }
+    }
+
+    public int getWidth() {
+        return this.width;
+    }
+
+    public int getHeight() {
+        return this.height;
     }
 }
