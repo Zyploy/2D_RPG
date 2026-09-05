@@ -1,8 +1,11 @@
 package engine.render;
 
 import engine.Window;
+import engine.input.ResizeListener;
 import org.joml.Matrix4f;
 
+import static engine.util.Constants.*;
+import static engine.util.Constants.TILE_SIZE;
 import static org.lwjgl.opengl.GL15.*;
 import static org.lwjgl.opengl.GL20.*;
 import static org.lwjgl.opengl.GL30.*;
@@ -53,14 +56,17 @@ public class Renderer {
         glBindVertexArray(0);
     }
 
-    public void render(float x, float y, float width, float height, Texture texture) {
+    public void render(float x, float y, int scale, Texture texture) {
         shader.bind();
         texture.bind();
 
-        Matrix4f transform = new Matrix4f().translate(x, y, 0.0f).scale(width, height, 1.0f);
+        float tileWidth = (ResizeListener.getVpWidth() / HOR_TILES) * (texture.getWidth() / TILE_SIZE);
+        float tileHeight = (ResizeListener.getVpHeight() / VER_TILES) * (texture.getHeight() / TILE_SIZE);
+
+        Matrix4f transform = new Matrix4f().translate(x * tileWidth, y * tileHeight, 0.0f).scale(tileWidth * scale, tileHeight * scale, 1.0f);
         shader.uploadMat4f("uTransform", transform);
 
-        Matrix4f projection = new Matrix4f().ortho(0, Window.get().getWidth(), Window.get().getHeight(), 0, -1, 1);
+        Matrix4f projection = new Matrix4f().ortho(0, ResizeListener.getVpWidth(), ResizeListener.getVpHeight(), 0, -1, 1);
         shader.uploadMat4f("uProjection", projection);
 
         shader.uploadInt("uTexture", 0);

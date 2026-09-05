@@ -2,6 +2,7 @@ package engine;
 
 import engine.input.KeyListener;
 import engine.input.MouseListener;
+import engine.input.ResizeListener;
 import engine.render.Renderer;
 import engine.render.Texture;
 import engine.util.ErrorHandler;
@@ -12,6 +13,7 @@ import org.lwjgl.system.MemoryStack;
 
 import java.nio.IntBuffer;
 
+import static engine.util.Constants.*;
 import static org.lwjgl.glfw.Callbacks.glfwFreeCallbacks;
 import static org.lwjgl.glfw.GLFW.*;
 import static org.lwjgl.opengl.GL11.*;
@@ -20,9 +22,15 @@ import static org.lwjgl.system.MemoryUtil.NULL;
 
 public class Window {
     private static Window instance;
-    private long window;
     private int width, height;
     private String title;
+    private boolean fullscreen;
+
+    private long window;
+    private long monitor;
+    private GLFWVidMode vidmode;
+
+    private int lastWidth, lastHeight, lastX, lastY;
 
     private Window() {
         this.width = 1280;
@@ -44,8 +52,8 @@ public class Window {
         loop();
 
         // Free the window callbacks and destroy the window
-        glfwFreeCallbacks(window);
-        glfwDestroyWindow(window);
+        glfwFreeCallbacks(this.window);
+        glfwDestroyWindow(this.window);
 
         // Terminate GLFW and free the error callback
         glfwTerminate();
@@ -68,60 +76,59 @@ public class Window {
         glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE); // the window will be resizable
 
         // Get the resolution of the primary monitor
-        GLFWVidMode vidmode = glfwGetVideoMode(glfwGetPrimaryMonitor());
-        int screenWidth = vidmode.width();
-        int screenHeight = vidmode.height();
-
-        // Set aspect ratio
-        float aspect = 16f / 9f;
+        this.monitor = glfwGetPrimaryMonitor();
+        this.vidmode = glfwGetVideoMode(this.monitor);
+        int screenWidth = this.vidmode.width();
+        int screenHeight = this.vidmode.height();
 
         // Sets the window size to half the screen size and maintains aspect ratio
         this.height = screenHeight;
-        this.width = (int)(this.height * aspect);
+        this.width = (int)(this.height * ASPECT);
         if(this.width > screenWidth) {
             this.width = screenWidth;
-            this.height = (int)(this.width / aspect);
+            this.height = (int)(this.width / ASPECT);
         }
 
         this.width /= 2;
         this.height /= 2;
 
+        this.fullscreen = false;
+
         // Create the window
-        window = glfwCreateWindow(this.width, this.height, this.title, NULL, NULL);
-        if (window == NULL) {
+        this.window = glfwCreateWindow(this.width, this.height, this.title, NULL, NULL);
+        if(this.window == NULL) {
             ErrorHandler.glfwWindowError();
         }
 
         // Setup a key callback. It will be called every time a key is pressed, repeated, or released.
-        glfwSetKeyCallback(window, KeyListener::keyCallback);
+        glfwSetKeyCallback(this.window, KeyListener::keyCallback);
 
-        glfwSetMouseButtonCallback(window, MouseListener::mouseButtonCallback);
-        glfwSetCursorPosCallback(window, MouseListener::mousePosCallback);
-        glfwSetScrollCallback(window, MouseListener::mouseScrollCallback);
+        glfwSetMouseButtonCallback(this.window, MouseListener::mouseButtonCallback);
+        glfwSetCursorPosCallback(this.window, MouseListener::mousePosCallback);
+        glfwSetScrollCallback(this.window, MouseListener::mouseScrollCallback);
+
+        glfwSetWindowSizeCallback(this.window, ResizeListener::resizeCallback);
+        glfwSetWindowPosCallback(this.window, ResizeListener::moveCallback);
 
         // Get the thread stack and push a new frame
-        try (MemoryStack stack = stackPush()) {
+        try(MemoryStack stack = stackPush()) {
             IntBuffer pWidth = stack.mallocInt(1); // int*
             IntBuffer pHeight = stack.mallocInt(1); // int*
 
             // Get the window size passed to glfwCreateWindow
-            glfwGetWindowSize(window, pWidth, pHeight);
+            glfwGetWindowSize(this.window, pWidth, pHeight);
 
             // Center the window
-            glfwSetWindowPos(
-                    window,
-                    (screenWidth - pWidth.get(0)) / 2,
-                    (screenHeight - pHeight.get(0)) / 2
-            );
+            glfwSetWindowPos(this.window, (screenWidth - pWidth.get(0)) / 2, (screenHeight - pHeight.get(0)) / 2);
         } // the stack frame is popped automatically
 
         // Make the OpenGL context current
-        glfwMakeContextCurrent(window);
+        glfwMakeContextCurrent(this.window);
         // Enable v-sync
         glfwSwapInterval(1);
 
         // Make the window visible
-        glfwShowWindow(window);
+        glfwShowWindow(this.window);
 
         // This line is critical for LWJGL's interoperation with GLFW's
         // OpenGL context, or any context that is managed externally.
@@ -138,22 +145,60 @@ public class Window {
         Renderer renderer = new Renderer();
 
         // Run the rendering loop until the user has attempted to close the window
-        while (!glfwWindowShouldClose(window)) {
+        while(!glfwWindowShouldClose(this.window)) {
             // Poll for window events. The key callback above will only be invoked during this call.
             glfwPollEvents();
 
             // The window should close when the Escape key is pressed
             if(KeyListener.isKeyPressed(GLFW_KEY_ESCAPE)) {
-                glfwSetWindowShouldClose(window, true);
+                glfwSetWindowShouldClose(this.window, true);
             }
 
-            glClearColor(1.0f, 1.0f, 1.0f, 1.0f); // Set the clear color
+            if(KeyListener.isKeyPressedOnce(GLFW_KEY_F11)) {
+                this.fullscreen = !this.fullscreen;
+                if(this.fullscreen) {
+                    this.lastWidth = this.width;
+                    this.lastHeight = this.height;
+                    this.lastX = ResizeListener.getX();
+                    this.lastY = ResizeListener.getY();
+
+                    setSize(this.vidmode.width(), this.vidmode.height());
+                    glfwSetWindowMonitor(this.window, this.monitor,
+                            0, 0,
+                            this.width, this.height,
+                            this.vidmode.refreshRate());
+                } else {
+                    setSize(this.lastWidth, this.lastHeight);
+                    glfwSetWindowMonitor(this.window, NULL,
+                            this.lastX, this.lastY,
+                            this.width, this.height,
+                            this.vidmode.refreshRate());
+                }
+            }
+
+            glClearColor(0.0f, 0.0f, 0.0f, 1.0f); // Set the clear color
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear the framebuffer
 
-            renderer.render(0, 0, 512, 512, new Texture("src/main/resources/textures/test.png"));
+            for(int y = 0; y < VER_TILES; y++) {
+                for(int x = 0; x < HOR_TILES; x++) {
+                    renderer.render(x, y, 1, new Texture("src/main/resources/textures/tileset.png"));
+                }
+            }
 
-            glfwSwapBuffers(window); // swap the color buffers
+            glfwSwapBuffers(this.window); // swap the color buffers
+
+            endFrame();
         }
+    }
+
+    public void endFrame() {
+        KeyListener.endFrame();
+        MouseListener.endFrame();
+    }
+
+    public void setSize(int width, int height) {
+        this.width = width;
+        this.height = height;
     }
 
     public int getWidth() {

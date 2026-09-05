@@ -7,6 +7,7 @@ public class MouseListener {
     private float x, y, lastX, lastY;
     private float scrollX, scrollY;
     private boolean[] mouseButtons = new boolean[GLFW_MOUSE_BUTTON_LAST + 1];
+    private boolean[] lastMouseButtons = new boolean[GLFW_MOUSE_BUTTON_LAST + 1];
 
     private MouseListener() {
         this.lastX = 0;
@@ -37,6 +38,7 @@ public class MouseListener {
                 get().mouseButtons[button] = true;
             } else if(action == GLFW_RELEASE) {
                 get().mouseButtons[button] = false;
+                get().lastMouseButtons[button] = false;
             }
         }
     }
@@ -44,6 +46,14 @@ public class MouseListener {
     public static void mouseScrollCallback(long window, double xoffset, double yoffset) {
         get().scrollX = (float)xoffset;
         get().scrollY = (float)yoffset;
+    }
+
+    public static void endFrame() {
+        get().lastX = get().x;
+        get().lastY = get().y;
+        for(int i = 0; i < get().mouseButtons.length; i++) {
+            get().lastMouseButtons[i] = get().mouseButtons[i];
+        }
     }
 
     public static float getX() {
@@ -73,6 +83,13 @@ public class MouseListener {
     public static boolean isMouseButtonPressed(int button) {
         if(button < get().mouseButtons.length) {
             return get().mouseButtons[button];
+        }
+        return false;
+    }
+
+    public static boolean isMouseButtonPressedOnce(int button) {
+        if(button < get().mouseButtons.length) {
+            return get().mouseButtons[button] && !get().lastMouseButtons[button];
         }
         return false;
     }
